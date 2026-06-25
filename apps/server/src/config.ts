@@ -8,6 +8,9 @@ import { join } from 'node:path';
  */
 export const CLAUDE_HOME = process.env.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_HOME ?? join(homedir(), '.claude');
 
+/** Where Codex persists rollout transcripts. */
+export const CODEX_HOME = process.env.CODEX_CONFIG_DIR ?? process.env.CODEX_HOME ?? join(homedir(), '.codex');
+
 /** Foreman's own data dir (the event log + hook spool live here). */
 export const FOREMAN_HOME = process.env.FOREMAN_HOME ?? join(homedir(), '.foreman');
 export const EVENT_LOG = join(FOREMAN_HOME, 'events.jsonl');
