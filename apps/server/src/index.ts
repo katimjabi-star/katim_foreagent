@@ -10,6 +10,7 @@ import { Orchestrator } from './control/orchestrator.ts';
 import { readProject } from './project-intel.ts';
 import { discoverAgents, detectVendors } from './intake.ts';
 import { detectMcp } from './mcp.ts';
+import { claudeProjectRepos } from './known-repos.ts';
 import { streamAi, runAi } from './ai/bridge.ts';
 import { readSessionDetail } from './session-detail.ts';
 import { listInstalledSkills, getCatalog, getFeed, getTemplates, installSkill, exportSkill } from './marketplace.ts';
@@ -93,6 +94,20 @@ if (process.env.FOREMAN_DEMO === '1') {
 }
 const orchestrator = new Orchestrator(log, join(FOREMAN_HOME, 'worktrees'));
 
+// Repos the intake may target = live sessions ∪ projects opened in Claude Code. The
+// latter makes a configured-but-idle repo (e.g. one with an MCP server but no live
+// transcript) selectable, so its context/MCP can surface. Used by /api/context and as
+// the path allow-list for the read-side discovery endpoints.
+async function knownRepos(): Promise<Array<{ repo: string; path: string }>> {
+  const byPath = new Map<string, { repo: string; path: string }>();
+  for (const r of sessions.repos()) byPath.set(r.path, r);
+  for (const r of await claudeProjectRepos()) if (!byPath.has(r.path)) byPath.set(r.path, r);
+  return [...byPath.values()].sort((a, b) => a.repo.localeCompare(b.repo));
+}
+async function knownRepoSet(): Promise<Set<string>> {
+  return new Set((await knownRepos()).map((r) => r.path));
+}
+
 async function handleControl(req: IncomingMessage, res: ServerResponse, path: string): Promise<boolean> {
   if (req.method !== 'POST') return false;
   try {
@@ -103,7 +118,7 @@ async function handleControl(req: IncomingMessage, res: ServerResponse, path: st
       };
       if (!b.taskId || !b.repoPath || !b.prompt) { sendJson(res, 400, { error: 'taskId, repoPath and prompt are required' }); return true; }
       // The control plane may only run in a repo the user already works in.
-      if (!new Set(sessions.repos().map((r) => r.path)).has(b.repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return true; }
+      if (!(await knownRepoSet()).has(b.repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return true; }
       const out = await orchestrator.spawn({
         taskId: b.taskId, repoPath: b.repoPath, vendor: b.vendor ?? 'claude-code', prompt: b.prompt, yolo: b.yolo,
         model: b.model, skills: b.skills, agents: b.agents, docs: b.docs,
@@ -144,8 +159,7 @@ async function handleControl(req: IncomingMessage, res: ServerResponse, path: st
 async function handleProject(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const repoPath = url.searchParams.get('path') ?? '';
-  const known = new Set(sessions.repos().map((r) => r.path));
-  if (!repoPath || !known.has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
+  if (!repoPath || !(await knownRepoSet()).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
   try { sendJson(res, 200, await readProject(repoPath)); }
   catch (e) { sendJson(res, 500, { error: (e as Error).message }); }
 }
@@ -154,12 +168,12 @@ async function handleProject(req: IncomingMessage, res: ServerResponse): Promise
 // user is most likely targeting (the live session, else the most-recently-touched
 // card), plus every known repo for the picker. Lets intake open pre-filled instead of
 // making the user re-select what Foreagent already observes.
-function handleContext(res: ServerResponse): void {
+async function handleContext(res: ServerResponse): Promise<void> {
   const board = replay(log.all()).state(Date.now());
   const cards = Object.values(board.cards);
   const live = cards.filter((c) => c.agentStatus === 'running' || c.agentStatus === 'waiting');
   const pick = (live.length ? live : cards).sort((a, b) => b.updatedAt - a.updatedAt)[0];
-  const reposList = sessions.repos();
+  const reposList = await knownRepos();
   let active: { repo: string; repoPath?: string; branch?: string; sessionId?: string; vendor?: string } | undefined;
   if (pick) {
     const repoPath = sessions.path(pick.sessionId) ?? reposList.find((r) => r.repo === pick.repo)?.path;
@@ -173,7 +187,7 @@ function handleContext(res: ServerResponse): void {
 // repos, same as /api/project, so it can't enumerate arbitrary disk locations.
 async function handleDiscoverAgents(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const repoPath = new URL(req.url ?? '/', 'http://localhost').searchParams.get('path') ?? '';
-  if (!repoPath || !new Set(sessions.repos().map((r) => r.path)).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
+  if (!repoPath || !(await knownRepoSet()).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
   try { sendJson(res, 200, await discoverAgents(repoPath)); }
   catch (e) { sendJson(res, 500, { error: (e as Error).message }); }
 }
@@ -185,7 +199,7 @@ async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<voi
   const url = new URL(req.url ?? '/', 'http://localhost');
   const repoPath = url.searchParams.get('path') ?? '';
   const vendor = (url.searchParams.get('vendor') ?? 'claude-code') as Vendor;
-  if (!repoPath || !new Set(sessions.repos().map((r) => r.path)).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
+  if (!repoPath || !(await knownRepoSet()).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
   try { sendJson(res, 200, await detectMcp(repoPath, vendor)); }
   catch (e) { sendJson(res, 500, { error: (e as Error).message }); }
 }
@@ -220,8 +234,7 @@ async function handleAi(req: IncomingMessage, res: ServerResponse, path: string)
   const b = (await readBody(req)) as { prompt?: string; message?: string; repoPath?: string; sessionId?: string };
   let cwd: string | undefined;
   if (b.repoPath) {
-    const known = new Set(sessions.repos().map((r) => r.path));
-    if (!known.has(b.repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return true; }
+    if (!(await knownRepoSet()).has(b.repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return true; }
     cwd = b.repoPath;
   }
 
@@ -291,7 +304,7 @@ const server = createServer((req, res) => {
   if (path === '/api/board') return sendJson(res, 200, replay(log.all()).state(Date.now()));
   if (path === '/api/events') return handleEvents(req, res);
   if (path === '/api/repos') return sendJson(res, 200, sessions.repos());
-  if (path === '/api/context') return handleContext(res);
+  if (path === '/api/context') { void handleContext(res); return; }
   if (path === '/api/vendors') { void detectVendors().then((v) => sendJson(res, 200, v)).catch((e) => sendJson(res, 500, { error: (e as Error).message })); return; }
   if (path === '/api/agents') return sendJson(res, 200, orchestrator.list());
   if (path === '/api/discover/agents') { void handleDiscoverAgents(req, res); return; }
