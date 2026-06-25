@@ -314,6 +314,20 @@ export async function discoverAgents(repoPath: string): Promise<DiscoveredAgent[
   catch { return []; }
 }
 
+/** An MCP server available to a vendor for a repo — local (project) or global (user) scope. */
+export interface McpServer {
+  name: string; vendor: Vendor; scope: 'user' | 'project'; source: string;
+  transport: 'stdio' | 'http' | 'sse'; command?: string; url?: string; enabled?: boolean;
+}
+
+/** MCP servers the selected vendor can use for this repo (local + global scope). */
+export async function fetchMcp(repoPath: string, vendor: Vendor): Promise<McpServer[]> {
+  try {
+    const r = await fetch(`/api/mcp?path=${encodeURIComponent(repoPath)}&vendor=${encodeURIComponent(vendor)}`);
+    return r.ok ? ((await r.json()) as McpServer[]) : [];
+  } catch { return []; }
+}
+
 /** Clean up a rough brief via `claude -p`. Fail-safe: returns the original on error. */
 export async function refinePrompt(prompt: string): Promise<{ refined: string; error?: string }> {
   try {

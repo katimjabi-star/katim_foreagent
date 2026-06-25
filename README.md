@@ -94,10 +94,16 @@ The **New task** button opens a loop-engineered intake that makes the run target
 unmissable *before* a single line is generated:
 
 - **Context card** — the folder (absolute path), project, git **branch** the worktree
-  forks from, the **model** that will run, the detected **stack**, and which **policy**
-  files the repo carries (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, …).
+  forks from, the **model** that will run, the detected **stack**, which **policy**
+  files the repo carries (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, …), and the **MCP
+  servers** available to the run.
 - **Vendor picker, gated on installs** — Claude Code / Codex / Gemini are listed, but only
   the CLIs actually found on your `PATH` are selectable (with the resolved path + version).
+- **MCP awareness, per vendor & scope** — the card shows which Model Context Protocol
+  servers the selected vendor can use, tagged **local** (this repo) vs **global** (all
+  repos), read from that vendor's own config (`~/.claude.json` + `.mcp.json`,
+  `~/.codex/config.toml`, `~/.gemini/settings.json`). Switching vendor re-scans, because
+  an MCP wired into Claude isn't visible to Codex.
 - **Model picker** — per-vendor model lists (see the table below), defaulting to each
   vendor's flagship.
 - **Brief tools** — one-click spelling/grammar **Refine** (via `claude -p`), PRD/spec
@@ -176,7 +182,7 @@ FOREMAN_DEMO=1 bun run dev   # seeded demo stream, no real Claude data needed
 
 ```
 packages/core   pure domain: event vocabulary, log, projection, parsers, pricing, orchestration, model catalog
-apps/server     node:http server, filesystem + hook watchers, control plane, vendor/CLI detection
+apps/server     node:http server, filesystem + hook watchers, control plane, vendor/CLI + MCP detection
 apps/web        Svelte 5 board + New task intake console
 assets/hooks    the fail-safe hook emitter
 bin             npx entry, hook installer, built server bundle

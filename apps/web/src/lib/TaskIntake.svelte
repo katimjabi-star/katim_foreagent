@@ -19,9 +19,9 @@
   import Icon from './Icon.svelte';
   import Button from './Button.svelte';
   import {
-    fetchContext, discoverAgents, refinePrompt, spawnAgent, fetchSkills, fetchVendors, fetchProject, streamAi,
+    fetchContext, discoverAgents, refinePrompt, spawnAgent, fetchSkills, fetchVendors, fetchProject, fetchMcp, streamAi,
     type Vendor, type DiscoveredAgent, type IntakeContext, type InstalledSkill, type CatalogSkill,
-    type IntakeDoc, type VendorInfo, type ProjectReport,
+    type IntakeDoc, type VendorInfo, type ProjectReport, type McpServer,
   } from './store.svelte.ts';
 
   const { onclose }: { onclose: () => void } = $props();
@@ -40,6 +40,8 @@
   let vendors = $state<VendorInfo[]>([]);
   let project = $state<ProjectReport | null>(null);
   let projLoading = $state(false);
+  let mcp = $state<McpServer[]>([]);
+  let mcpLoading = $state(false);
 
   let agents = $state<DiscoveredAgent[]>([]);
   let selAgents = $state<string[]>([]);
@@ -106,6 +108,17 @@
     fetchProject(path).then((p) => { if (untrack(() => repo) === path) { project = p; projLoading = false; } });
     discoverAgents(path).then((a) => { if (untrack(() => repo) === path) agents = a; });
     untrack(() => runSuggest(path));
+  });
+
+  // MCP servers available to the run depend on BOTH the repo (project scope) and the
+  // chosen vendor (each vendor reads its own config) — so this refetches on either.
+  $effect(() => {
+    const path = repo, v = vendor;
+    if (!path) { mcp = []; return; }
+    mcpLoading = true;
+    fetchMcp(path, v).then((m) => {
+      if (untrack(() => repo) === path && untrack(() => vendor) === v) { mcp = m; mcpLoading = false; }
+    });
   });
 
   function runSuggest(path: string): void {
@@ -233,6 +246,22 @@
               {#if policies.length}{#each policies as p}<span class="tag policy">{p}</span>{/each}
               {:else if projLoading}<span class="dim">checking…</span>
               {:else}<span class="dim">no policy files (CLAUDE.md, AGENTS.md…)</span>{/if}
+            </span>
+          </div>
+          <div class="cc-row">
+            <span class="cc-k"><Icon name="market" size={12} /> MCP</span>
+            <span class="cc-v">
+              {#if mcp.length}
+                {#each mcp as m}
+                  <span
+                    class="tag mcp"
+                    class:global={m.scope === 'user'}
+                    class:off={m.enabled === false}
+                    title={`${m.scope === 'project' ? 'local (this repo)' : 'global (all repos)'} · ${m.transport}${m.command ? ` · ${m.command}` : ''}${m.url ? ` · ${m.url}` : ''}${m.enabled === false ? ' · not enabled here (needs approval)' : ''} · ${m.source}`}
+                  >{m.name}<span class="scope">{m.scope === 'project' ? 'local' : 'global'}</span></span>
+                {/each}
+              {:else if mcpLoading}<span class="dim">scanning…</span>
+              {:else}<span class="dim">no MCP servers for {VENDOR_LABEL[vendor]} (local or global)</span>{/if}
             </span>
           </div>
         </div>
@@ -372,6 +401,11 @@
   .gitmeta { font-family: var(--mono); font-size: 10.5px; color: var(--txt-faint); }
   .tag { font-family: var(--mono); font-size: 10.5px; color: var(--txt-dim); background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
   .tag.policy { color: var(--accent); border-color: var(--accent-dim); }
+  /* MCP tags carry a scope badge: local (project) = accent, global (user) = neutral. */
+  .tag.mcp { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); border-color: var(--accent-dim); }
+  .tag.mcp.global { color: var(--txt-dim); border-color: var(--line); }
+  .tag.mcp.off { opacity: .55; text-decoration: line-through; }
+  .tag.mcp .scope { font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-faint); border-left: 1px solid var(--line); padding-left: 4px; }
 
   .ctxline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11px; color: var(--txt-dim); background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 2px 9px; }

@@ -9,6 +9,7 @@ import { SessionRegistry } from './watchers/registry.ts';
 import { Orchestrator } from './control/orchestrator.ts';
 import { readProject } from './project-intel.ts';
 import { discoverAgents, detectVendors } from './intake.ts';
+import { detectMcp } from './mcp.ts';
 import { streamAi, runAi } from './ai/bridge.ts';
 import { readSessionDetail } from './session-detail.ts';
 import { listInstalledSkills, getCatalog, getFeed, getTemplates, installSkill, exportSkill } from './marketplace.ts';
@@ -177,6 +178,18 @@ async function handleDiscoverAgents(req: IncomingMessage, res: ServerResponse): 
   catch (e) { sendJson(res, 500, { error: (e as Error).message }); }
 }
 
+// GET /api/mcp?path=<repoPath>&vendor=<vendor> — MCP servers available to that vendor
+// for the repo, split into local (project) and global (user) scope. Path is restricted
+// to observed repos, same guard as /api/project / /api/discover/agents.
+async function handleMcp(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const repoPath = url.searchParams.get('path') ?? '';
+  const vendor = (url.searchParams.get('vendor') ?? 'claude-code') as Vendor;
+  if (!repoPath || !new Set(sessions.repos().map((r) => r.path)).has(repoPath)) { sendJson(res, 403, { error: 'unknown repo path' }); return; }
+  try { sendJson(res, 200, await detectMcp(repoPath, vendor)); }
+  catch (e) { sendJson(res, 500, { error: (e as Error).message }); }
+}
+
 // AI endpoints (POST, SSE-streamed response). The prompt rides the request BODY, so
 // the client reads the stream via fetch() rather than EventSource (which is GET-only).
 // repoPath, when given, is validated against observed repos so claude only ever runs
@@ -282,6 +295,7 @@ const server = createServer((req, res) => {
   if (path === '/api/vendors') { void detectVendors().then((v) => sendJson(res, 200, v)).catch((e) => sendJson(res, 500, { error: (e as Error).message })); return; }
   if (path === '/api/agents') return sendJson(res, 200, orchestrator.list());
   if (path === '/api/discover/agents') { void handleDiscoverAgents(req, res); return; }
+  if (path === '/api/mcp') { void handleMcp(req, res); return; }
   if (path === '/api/reviewers') return sendJson(res, 200, { reviewers: orchestrator.reviewers() });
   if (path === '/api/project') { void handleProject(req, res); return; }
   if (path === '/api/session') { void handleSession(req, res); return; }
