@@ -235,14 +235,23 @@ function pushActivity(a: Activity): void {
 }
 
 let refetchTimer: ReturnType<typeof setTimeout> | undefined;
+async function fetchBoardNow(): Promise<void> {
+  try {
+    const res = await fetch('/api/board');
+    if (res.ok) {
+      reconcileBoardSnapshot((await res.json()) as BoardState);
+      board.connected = true;
+    }
+  } catch {
+    board.connected = false;
+  }
+}
+
 function scheduleRefetch(): void {
   if (refetchTimer) return;
   refetchTimer = setTimeout(async () => {
     refetchTimer = undefined;
-    try {
-      const res = await fetch('/api/board');
-      if (res.ok) board.value = (await res.json()) as BoardState;
-    } catch { /* transient; SSE will trigger another */ }
+    await fetchBoardNow();
   }, 120);
 }
 
@@ -457,12 +466,23 @@ export async function reviewCard(taskId: string, approve: boolean): Promise<void
   catch { /* SSE will reconcile board state regardless */ }
 }
 
-export function connect(): void {
+let connectedOnce = false;
+let es: EventSource | undefined;
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+export function connect(): () => void {
+  if (connectedOnce) return () => {};
+  connectedOnce = true;
   armNotifications();
   // Tick a clock so recency-based "live" highlighting fades as work goes quiet.
   board.now = Date.now();
-  setInterval(() => { board.now = Date.now(); }, 4000);
-  const es = new EventSource('/api/events');
+  clockTimer = setInterval(() => { board.now = Date.now(); }, 4000);
+  // SSE is primary, but a light poll keeps the board fresh across missed events,
+  // git-only projection changes, browser sleep, and dev-server restarts.
+  void fetchBoardNow();
+  pollTimer = setInterval(fetchBoardNow, 3500);
+  es = new EventSource('/api/events');
   es.addEventListener('mode', (ev) => {
     const m = JSON.parse((ev as MessageEvent).data) as { mode: BoardMode; eventLog?: string };
     if (m.mode !== mode.value || m.eventLog !== mode.eventLog) resetModeLocalState();
@@ -486,5 +506,17 @@ export function connect(): void {
     }
     scheduleRefetch();
   });
-  es.onerror = () => { board.connected = false; };
+  es.onerror = () => {
+    board.connected = false;
+    scheduleRefetch();
+  };
+  return () => {
+    connectedOnce = false;
+    es?.close();
+    es = undefined;
+    if (clockTimer) clearInterval(clockTimer);
+    if (pollTimer) clearInterval(pollTimer);
+    clockTimer = undefined;
+    pollTimer = undefined;
+  };
 }
