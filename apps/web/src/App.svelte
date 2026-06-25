@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { board, ui, connect, waitingCards, type View } from './lib/store.svelte.ts';
+  import { board, mode, ui, connect, setBoardMode, waitingCards, type View } from './lib/store.svelte.ts';
   import BoardView from './lib/BoardView.svelte';
   import ProjectView from './lib/ProjectView.svelte';
   import SessionsView from './lib/SessionsView.svelte';
@@ -50,6 +50,10 @@
     <header>
       <div class="title"><span class="tick"></span>{TITLES[ui.view]}</div>
       <div class="spacer"></div>
+      <div class="mode" title={mode.value === 'live' ? 'Showing actual Claude/Codex/Gemini sessions' : 'Showing the in-memory demo board'}>
+        <button class:active={mode.value === 'live'} disabled={mode.switching} onclick={() => setBoardMode('live')}>Live</button>
+        <button class:active={mode.value === 'demo'} disabled={mode.switching} onclick={() => setBoardMode('demo')}>Demo</button>
+      </div>
       <div class="stat"><b>{totals.agents}</b> agents<span class="sep"></span>session <b>${totals.costUsd.toFixed(2)}</b><span class="sep"></span>ctx <b>{Math.round(totals.pctUsed * 100)}%</b></div>
       <AttentionRail />
       <Button onclick={() => (showSpawn = true)}>New task</Button>
@@ -96,8 +100,12 @@
   header { display: flex; align-items: center; gap: 14px; padding: 0 20px; height: 58px; flex: 0 0 58px; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015)); backdrop-filter: blur(16px) saturate(140%); border-bottom: 1px solid var(--line); }
   .title { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: .005em; }
   .title .tick { width: 18px; height: 3px; background: var(--accent); flex: 0 0 auto; }
-  .attention { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--warn); background: rgba(230,172,51,.08); border: 1px solid rgba(230,172,51,.3); padding: 5px 10px; border-radius: var(--r-sm); }
   .spacer { flex: 1; }
+  .mode { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); background: rgba(255,255,255,.035); border-radius: 999px; }
+  .mode button { border: 0; background: transparent; color: var(--txt-faint); border-radius: 999px; padding: 5px 10px; font-family: var(--mono); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; cursor: pointer; transition: background .14s, color .14s; }
+  .mode button:hover:not(:disabled) { color: var(--txt); background: rgba(255,255,255,.06); }
+  .mode button.active { color: #1a1505; background: var(--accent); }
+  .mode button:disabled { opacity: .6; cursor: wait; }
   .stat { display: flex; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--txt-dim); }
   .stat b { color: var(--txt); font-weight: 600; }
   .stat .sep { display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: var(--line-2); margin: 0 10px; }

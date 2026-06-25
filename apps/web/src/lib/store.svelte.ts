@@ -10,6 +10,7 @@ export type Column = 'aligning' | 'specd' | 'sliced' | 'building' | 'review' | '
 export type Vendor = 'claude-code' | 'codex' | 'gemini-cli' | 'unknown';
 export type AgentStatus = 'running' | 'idle' | 'waiting' | 'done' | 'error';
 export type Reviewer = 'claude-code' | 'codex' | 'gemini-cli';
+export type BoardMode = 'live' | 'demo';
 export type AlertSeverity = 'info' | 'warn' | 'error';
 export type AlertKind =
   | 'needs-input' | 'rate-limit' | 'server-error' | 'tool-error' | 'auth'
@@ -49,6 +50,34 @@ export interface Activity { ts: number; kind: 'tool' | 'message' | 'status' | 'd
 // ---- Top-level navigation ----
 export type View = 'board' | 'project' | 'sessions' | 'market';
 export const ui = $state<{ view: View; projectPath: string; sessionDetail?: string; cardDrawer?: string }>({ view: 'board', projectPath: '' });
+
+export const mode = $state<{ value: BoardMode; eventLog?: string; switching: boolean; error?: string }>({
+  value: 'live',
+  eventLog: undefined,
+  switching: false,
+  error: undefined,
+});
+
+export async function setBoardMode(next: BoardMode): Promise<void> {
+  if (mode.switching || next === mode.value) return;
+  mode.switching = true;
+  mode.error = undefined;
+  try {
+    const r = await fetch('/api/mode', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: next }),
+    });
+    const j = (await r.json()) as { mode?: BoardMode; eventLog?: string; error?: string };
+    if (!r.ok || !j.mode) throw new Error(j.error ?? `HTTP ${r.status}`);
+    mode.value = j.mode;
+    mode.eventLog = j.eventLog;
+  } catch (e) {
+    mode.error = (e as Error).message;
+  } finally {
+    mode.switching = false;
+  }
+}
 
 // ---- Project Overview (Sprint A) ----
 export interface Dependency { name: string; version: string; dev: boolean; }
@@ -253,6 +282,23 @@ function describe(e: AppendEvent): Activity | undefined {
   }
 }
 
+function reconcileBoardSnapshot(next: BoardState): void {
+  board.value = next;
+  const hasSelected = !!board.selected && !!next.cards[board.selected];
+  if (!hasSelected) board.selected = undefined;
+  const hasDrawer = !!ui.cardDrawer && !!next.cards[ui.cardDrawer];
+  if (!hasDrawer) ui.cardDrawer = undefined;
+  if (board.repoFilter && !Object.values(next.cards).some((c) => c.repo === board.repoFilter)) {
+    board.repoFilter = '';
+  }
+}
+
+function resetModeLocalState(): void {
+  board.activity = [];
+  board.selected = undefined;
+  ui.cardDrawer = undefined;
+}
+
 // ---- Control plane (write-side) — POST helpers for the orchestration API. ----
 
 export interface RepoChoice { repo: string; path: string; }
@@ -417,8 +463,15 @@ export function connect(): void {
   board.now = Date.now();
   setInterval(() => { board.now = Date.now(); }, 4000);
   const es = new EventSource('/api/events');
+  es.addEventListener('mode', (ev) => {
+    const m = JSON.parse((ev as MessageEvent).data) as { mode: BoardMode; eventLog?: string };
+    if (m.mode !== mode.value || m.eventLog !== mode.eventLog) resetModeLocalState();
+    mode.value = m.mode;
+    mode.eventLog = m.eventLog;
+    mode.error = undefined;
+  });
   es.addEventListener('snapshot', (ev) => {
-    board.value = JSON.parse((ev as MessageEvent).data) as BoardState;
+    reconcileBoardSnapshot(JSON.parse((ev as MessageEvent).data) as BoardState);
     board.connected = true;
   });
   es.addEventListener('append', (ev) => {

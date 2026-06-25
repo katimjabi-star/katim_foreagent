@@ -80,6 +80,39 @@ describe('subagents from Task tool calls', () => {
   });
 });
 
+describe('live session attribution', () => {
+  it('keeps session-level tool/context events on the active building card', () => {
+    const s = board([
+      makeEvent('task.created', { taskId: 's:1', sessionId: 's', repo: 'r', title: 'active', column: 'building' }),
+      makeEvent('task.created', { taskId: 's:2', sessionId: 's', repo: 'r', title: 'newer pending', column: 'sliced' }),
+      makeEvent('tool.used', { agentId: 'session:s', tool: 'Edit', detail: 'src/app.ts' }),
+      makeEvent('context.snapshot', {
+        sessionId: 's',
+        snapshot: { pctUsed: 0.2, tokensIn: 1000, tokensOut: 100, cacheRead: 0, costUsd: 0.01, model: 'claude-opus-4-8' },
+      }),
+    ]);
+    expect(s.cards['s:1']!.lastTool).toBe('Edit · src/app.ts');
+    expect(s.cards['s:1']!.context?.tokensIn).toBe(1000);
+    expect(s.cards['s:2']!.lastTool).toBeUndefined();
+    expect(s.cards['s:2']!.context).toBeUndefined();
+  });
+
+  it('keeps later session-level events on the card that already has live telemetry', () => {
+    const s = board([
+      makeEvent('task.created', { taskId: 's:1', sessionId: 's', repo: 'r', title: 'first slice', column: 'sliced' }),
+      makeEvent('tool.used', { agentId: 'session:s', tool: 'Read', detail: 'README.md' }),
+      makeEvent('task.created', { taskId: 's:2', sessionId: 's', repo: 'r', title: 'newer slice', column: 'sliced' }),
+      makeEvent('context.snapshot', {
+        sessionId: 's',
+        snapshot: { pctUsed: 0.3, tokensIn: 2000, tokensOut: 200, cacheRead: 0, costUsd: 0.02, model: 'claude-opus-4-8' },
+      }),
+    ]);
+    expect(s.cards['s:1']!.lastTool).toBe('Read · README.md');
+    expect(s.cards['s:1']!.context?.tokensIn).toBe(2000);
+    expect(s.cards['s:2']!.context).toBeUndefined();
+  });
+});
+
 describe('pipeline: Spec’d ↔ Sliced', () => {
   const plan: ForemanEvent[] = [
     makeEvent('task.created', { taskId: 's:1', sessionId: 's', repo: 'r', title: 'one', column: 'sliced' }),

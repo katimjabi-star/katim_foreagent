@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { makeEvent, parseTaskJson, claudeStatusToColumn, type EventLog } from '@foreman/core';
@@ -13,12 +13,20 @@ import type { SessionRegistry } from './registry.ts';
  */
 export function watchTasks(tasksDir: string, log: EventLog, sessions: SessionRegistry): FSWatcher {
   const seen = new Set<string>();
+  let initialScan = true;
+  const staleInitialMs = Math.max(1, Number(process.env.FOREMAN_TASK_IMPORT_MAX_AGE_HOURS ?? 24)) * 60 * 60 * 1000;
 
   const sessionOf = (path: string) => basename(dirname(path));
   const localId = (path: string) => basename(path, '.json');
   const gid = (sessionId: string, id: string) => `${sessionId}:${id}`;
   const ns = (sessionId: string, ids: string[]) => ids.map((i) => gid(sessionId, i));
   const repoFor = (sessionId: string) => sessions.repo(sessionId) ?? `session ${sessionId.slice(0, 8)}`;
+
+  function isStaleInitial(path: string): boolean {
+    if (!initialScan) return false;
+    try { return Date.now() - statSync(path).mtimeMs > staleInitialMs; }
+    catch { return true; }
+  }
 
   function emit(path: string): void {
     let raw: string;
@@ -27,6 +35,13 @@ export function watchTasks(tasksDir: string, log: EventLog, sessions: SessionReg
     if (!task) return;
     const sessionId = sessionOf(path);
     const taskId = gid(sessionId, task.id);
+    if (isStaleInitial(path)) {
+      // On startup, ~/.claude/tasks can contain old TodoWrite files from prior
+      // sessions. They are not live cards; remove any previously imported copy
+      // from Foreagent's event log so Live mode does not show stale work.
+      log.append(makeEvent('task.removed', { taskId }));
+      return;
+    }
     const column = claudeStatusToColumn(task.status);
     const subtitle = task.status === 'in_progress' ? (task.activeForm ?? task.subject) : undefined;
 
@@ -63,6 +78,7 @@ export function watchTasks(tasksDir: string, log: EventLog, sessions: SessionReg
     })
     .on('add', emit)
     .on('change', emit)
+    .on('ready', () => { initialScan = false; })
     .on('unlink', (path) => {
       const taskId = gid(sessionOf(path), localId(path));
       if (seen.delete(taskId)) log.append(makeEvent('task.removed', { taskId }));

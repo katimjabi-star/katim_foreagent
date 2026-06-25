@@ -262,13 +262,28 @@ export class BoardProjection {
     return undefined;
   }
   private bySession(sessionId: string): Card | undefined {
-    // A session can own several cards; the live meter belongs on the one being
-    // worked. Prefer the building card, then the most-recently-touched.
+    // A session can own several cards; session-level transcript/hook events
+    // belong on the one being worked, not on an arbitrary newest pending card.
+    // Prefer active lifecycle cards, then the latest card that already has live
+    // telemetry, then the most-recently-touched fallback.
     let best: Card | undefined;
+    const rank = (c: Card): number => {
+      if (c.agentStatus === 'running' || c.agentStatus === 'waiting') return 5;
+      if (c.column === 'building') return 4;
+      if (c.column === 'review') return 3;
+      if (c.lastTool || c.context || c.subagents?.length) return 2;
+      if (c.column === 'sliced') return 1;
+      return 0;
+    };
     for (const c of this.cards.values()) {
       if (c.sessionId !== sessionId) continue;
-      if (c.column === 'building') return c;
-      if (!best || c.updatedAt > best.updatedAt) best = c;
+      if (
+        !best ||
+        rank(c) > rank(best) ||
+        (rank(c) === rank(best) && c.updatedAt > best.updatedAt)
+      ) {
+        best = c;
+      }
     }
     return best;
   }

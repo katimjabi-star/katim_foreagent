@@ -2,6 +2,20 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ForemanEvent } from './events.ts';
 
+/** Sentinel path that makes an EventLog purely in-memory (no file load/persist). */
+export const MEMORY_LOG = ':memory:';
+
+export interface EventLogOptions {
+  /**
+   * In-memory cap (only honoured for `:memory:` logs, e.g. the demo stream). When
+   * the buffer grows past this, the oldest non-preserved events are dropped so a
+   * long-running demo can't leak memory. The first `preserve` events (the demo's
+   * structural seed: task.created / agent.spawned) are never trimmed.
+   */
+  cap?: number;
+  preserve?: number;
+}
+
 /**
  * Append-only event log backed by a JSONL file.
  *
@@ -13,9 +27,15 @@ import type { ForemanEvent } from './events.ts';
 export class EventLog {
   private events: ForemanEvent[] = [];
   private listeners = new Set<(e: ForemanEvent) => void>();
+  private readonly memory: boolean;
+  private readonly cap: number;
+  private readonly preserve: number;
 
-  constructor(private readonly file: string) {
-    this.load();
+  constructor(private readonly file: string, opts: EventLogOptions = {}) {
+    this.memory = file === MEMORY_LOG;
+    this.cap = Math.max(0, opts.cap ?? 0);
+    this.preserve = Math.max(0, opts.preserve ?? 0);
+    if (!this.memory) this.load();
   }
 
   private load(): void {
@@ -39,9 +59,17 @@ export class EventLog {
   /** Append, persist, and fan out to live subscribers (SSE). */
   append(event: ForemanEvent): ForemanEvent {
     this.events.push(event);
-    appendFileSync(this.file, JSON.stringify(event) + '\n');
+    if (!this.memory) appendFileSync(this.file, JSON.stringify(event) + '\n');
+    else this.trim();
     for (const fn of this.listeners) fn(event);
     return event;
+  }
+
+  private trim(): void {
+    if (!this.cap || this.events.length <= this.cap) return;
+    const preserved = this.events.slice(0, this.preserve);
+    const tail = this.events.slice(Math.max(this.preserve, this.events.length - (this.cap - preserved.length)));
+    this.events = [...preserved, ...tail];
   }
 
   /** All events so far (for replaying into a fresh projection / late SSE join). */

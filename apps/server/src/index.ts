@@ -1,11 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
-import { EventLog, replay, buildRefinePrompt, type ForemanEvent, type Vendor, type Reviewer, type IntakeDoc } from '@foreman/core';
+import { EventLog, MEMORY_LOG, replay, buildRefinePrompt, type ForemanEvent, type Vendor, type Reviewer, type IntakeDoc } from '@foreman/core';
 import { EVENT_LOG, FOREMAN_HOME, PORT, WEB_DIST } from './config.ts';
 import { startDemo } from './demo.ts';
 import { startWatchers } from './watchers/index.ts';
-import { SessionRegistry } from './watchers/registry.ts';
 import { Orchestrator } from './control/orchestrator.ts';
 import { readProject } from './project-intel.ts';
 import { discoverAgents, detectVendors } from './intake.ts';
@@ -15,7 +14,31 @@ import { streamAi, runAi } from './ai/bridge.ts';
 import { readSessionDetail } from './session-detail.ts';
 import { listInstalledSkills, getCatalog, getFeed, getTemplates, installSkill, exportSkill } from './marketplace.ts';
 
-const log = new EventLog(EVENT_LOG);
+type BoardMode = 'live' | 'demo';
+
+const liveLog = new EventLog(EVENT_LOG);
+// Demo stays in memory: it should never pollute ~/.foreman/events.jsonl or make
+// "live" mode look like the sample board after the user toggles back.
+const demoLog = new EventLog(MEMORY_LOG, { cap: 1_000, preserve: 24 });
+startDemo(demoLog);
+
+let boardMode: BoardMode = process.env.FOREMAN_DEMO === '1' || process.env.FOREMAN_MODE === 'demo' ? 'demo' : 'live';
+const modeListeners = new Set<(mode: BoardMode) => void>();
+
+function activeLog(): EventLog {
+  return boardMode === 'demo' ? demoLog : liveLog;
+}
+
+function modeInfo(): { mode: BoardMode; eventLog: string; demo: true; live: true } {
+  return { mode: boardMode, eventLog: boardMode === 'demo' ? MEMORY_LOG : EVENT_LOG, demo: true, live: true };
+}
+
+function setBoardMode(mode: BoardMode): void {
+  if (mode === boardMode) return;
+  boardMode = mode;
+  console.log(`[foreman] board mode → ${mode}`);
+  for (const fn of modeListeners) fn(mode);
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -41,14 +64,28 @@ function handleEvents(req: IncomingMessage, res: ServerResponse): void {
     connection: 'keep-alive',
     'x-accel-buffering': 'no',
   });
-  const board = replay(log.all()).state(Date.now());
-  res.write(`event: snapshot\ndata: ${JSON.stringify(board)}\n\n`);
+  function writeSnapshot(): void {
+    const board = replay(activeLog().all()).state(Date.now());
+    res.write(`event: snapshot\ndata: ${JSON.stringify(board)}\n\n`);
+  }
+  function subscribeActive(): () => void {
+    return activeLog().subscribe((e: ForemanEvent) => {
+      res.write(`event: append\ndata: ${JSON.stringify(e)}\n\n`);
+    });
+  }
 
-  const unsub = log.subscribe((e: ForemanEvent) => {
-    res.write(`event: append\ndata: ${JSON.stringify(e)}\n\n`);
-  });
+  res.write(`event: mode\ndata: ${JSON.stringify(modeInfo())}\n\n`);
+  writeSnapshot();
+  let unsub = subscribeActive();
+  const unsubMode = (mode: BoardMode): void => {
+    unsub();
+    res.write(`event: mode\ndata: ${JSON.stringify(modeInfo())}\n\n`);
+    writeSnapshot();
+    unsub = subscribeActive();
+  };
+  modeListeners.add(unsubMode);
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
-  req.on('close', () => { clearInterval(ping); unsub(); });
+  req.on('close', () => { clearInterval(ping); modeListeners.delete(unsubMode); unsub(); });
 }
 
 /** Serve the built Svelte SPA in prod. In dev, Vite serves the UI and proxies here. */
@@ -83,16 +120,12 @@ function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-// Boot the read-side (or demo) and the control plane, sharing one session registry.
-let sessions: SessionRegistry;
-if (process.env.FOREMAN_DEMO === '1') {
-  startDemo(log);
-  sessions = new SessionRegistry();
-  console.log('[foreman] demo stream enabled');
-} else {
-  ({ sessions } = startWatchers(log));
-}
-const orchestrator = new Orchestrator(log, join(FOREMAN_HOME, 'worktrees'));
+// Boot the real read-side and the control plane. Demo is a separate in-memory log
+// selected by /api/mode, so live watchers keep collecting real sessions even while
+// the user is looking at the demo board.
+const { sessions } = startWatchers(liveLog);
+console.log(`[foreman] initial board mode: ${boardMode}`);
+const orchestrator = new Orchestrator(liveLog, join(FOREMAN_HOME, 'worktrees'));
 
 // Repos the intake may target = live sessions ∪ projects opened in Claude Code. The
 // latter makes a configured-but-idle repo (e.g. one with an MCP server but no live
@@ -169,7 +202,9 @@ async function handleProject(req: IncomingMessage, res: ServerResponse): Promise
 // card), plus every known repo for the picker. Lets intake open pre-filled instead of
 // making the user re-select what Foreagent already observes.
 async function handleContext(res: ServerResponse): Promise<void> {
-  const board = replay(log.all()).state(Date.now());
+  // Context/intake are about acting on real repos, not the sample "acme/api"
+  // demo board. Keep them pinned to live events even when the board is in demo.
+  const board = replay(liveLog.all()).state(Date.now());
   const cards = Object.values(board.cards);
   const live = cards.filter((c) => c.agentStatus === 'running' || c.agentStatus === 'waiting');
   const pick = (live.length ? live : cards).sort((a, b) => b.updatedAt - a.updatedAt)[0];
@@ -300,8 +335,21 @@ async function handleMarket(req: IncomingMessage, res: ServerResponse, path: str
 
 const server = createServer((req, res) => {
   const path = (req.url ?? '/').split('?')[0]!;
-  if (path === '/api/health') return sendJson(res, 200, { ok: true, version: '0.1.0' });
-  if (path === '/api/board') return sendJson(res, 200, replay(log.all()).state(Date.now()));
+  if (path === '/api/health') return sendJson(res, 200, { ok: true, version: '0.1.0', ...modeInfo() });
+  if (path === '/api/mode') {
+    if (req.method === 'GET') return sendJson(res, 200, modeInfo());
+    if (req.method === 'POST') {
+      void readBody(req).then((b) => {
+        const requested = (b as { mode?: string }).mode;
+        if (requested !== 'live' && requested !== 'demo') return sendJson(res, 400, { error: 'mode must be "live" or "demo"' });
+        setBoardMode(requested);
+        return sendJson(res, 200, modeInfo());
+      }).catch((e) => sendJson(res, 500, { error: (e as Error).message }));
+      return;
+    }
+    return sendJson(res, 405, { error: 'method not allowed' });
+  }
+  if (path === '/api/board') return sendJson(res, 200, replay(activeLog().all()).state(Date.now()));
   if (path === '/api/events') return handleEvents(req, res);
   if (path === '/api/repos') return sendJson(res, 200, sessions.repos());
   if (path === '/api/context') { void handleContext(res); return; }

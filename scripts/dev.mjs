@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Zero-dependency dev orchestrator: runs the bun TS server (:3777, demo on) and
-// the Vite dev server (:5173, proxies /api → server). One Ctrl-C kills both.
+// Zero-dependency dev orchestrator: runs the bun TS server (:3777) and the Vite
+// dev server (:5173, proxies /api → server). One Ctrl-C kills both.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -22,7 +22,7 @@ function shutdown(code) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
-run('bun', ['apps/server/src/index.ts'], { FOREMAN_DEMO: '1', PORT: '3777' });
+run('bun', ['apps/server/src/index.ts'], { PORT: '3777' });
 run('npx', ['vite', '--config', 'apps/web/vite.config.ts']);
 
-console.log('\n[foreman] dev up → open http://localhost:5173  (server :3777, demo stream on)\n');
+console.log(`\n[foreman] dev up → open http://localhost:5173  (server :3777, initial mode: ${process.env.FOREMAN_DEMO === '1' ? 'demo' : 'live'})\n`);
