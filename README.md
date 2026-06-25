@@ -4,6 +4,8 @@
 that watches your Claude Code / Codex / Gemini sessions, shows live context-budget and
 cost meters, and — when you're ready — spawns, runs, and reviews agents itself.
 
+![FOREAGENT agent board — six-column pipeline with live context %, cost, and token meters per card, an agent stream, and a review gate](docs/screenshots/board.png)
+
 ---
 
 ## Quick start
