@@ -1,0 +1,11 @@
+{
+  "name": "@foreman/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@foreman/core": "workspace:*",
+    "chokidar": "^4.0.3"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "loop-engineering",
+    "title": "Loop Engineering",
+    "tag": "technique",
+    "summary": "Designing the agent's outer loop — when to plan, act, verify, and stop — instead of just writing one prompt. Treat the control flow (retries, checkpoints, self-verification, budget-aware stopping) as the real engineering surface.",
+    "why": "As models get more capable, the leverage moves from the single prompt to the loop around it. A good loop turns a fallible single shot into a reliable system.",
+    "source": "HumanLayer / agent-harness practice"
+  },
+  {
+    "id": "context-engineering",
+    "title": "Context Engineering & the Dumb Zone",
+    "tag": "technique",
+    "summary": "Manage the context window as a budget. Quality degrades as utilization climbs — past ~40% (the 'dumb zone') models start losing the plot. Compact, summarize, and offload to keep the working set sharp.",
+    "why": "Context is the scarcest resource in long agent runs. Foreagent's meters exist precisely to make this visible.",
+    "source": "HumanLayer"
+  },
+  {
+    "id": "subagent-orchestration",
+    "title": "Subagent Orchestration",
+    "tag": "pattern",
+    "summary": "Fan work out to fresh subagents with clean context, each returning a small structured result. Parallelize independent work; isolate risky work; verify with adversarial subagents before committing.",
+    "why": "One context can't hold everything. Decomposition + independent verification beats a single overloaded agent.",
+    "source": "Anthropic / multi-agent research"
+  },
+  {
+    "id": "dynamic-workflows",
+    "title": "Dynamic Workflows",
+    "tag": "pattern",
+    "summary": "Deterministic control flow (loops, conditionals, fan-out) that decides at runtime how many agents to spawn and what to verify — scaling depth to the task and the budget rather than a fixed script.",
+    "why": "Static pipelines under-serve hard tasks and over-serve easy ones. Dynamic flows adapt.",
+    "source": "Workflow orchestration practice"
+  },
+  {
+    "id": "skills",
+    "title": "Agent Skills",
+    "tag": "capability",
+    "summary": "Composable, model-invoked capabilities (a folder with a SKILL.md + assets) that load on demand. Skills package domain expertise — APIs, conventions, runbooks — so the agent pulls in exactly what a task needs.",
+    "why": "Skills turn one-off prompt engineering into reusable, shareable units. This is what the Skills hub here manages.",
+    "source": "Anthropic / Matt Pocock 'Agent Skills'"
+  },
+  {
+    "id": "review-gates",
+    "title": "Review Gates & Worktree Isolation",
+    "tag": "pattern",
+    "summary": "Let agents run autonomously inside throwaway git worktrees, then surface a diff to a human review gate. A bad run is a discarded branch, never a mutated working tree.",
+    "why": "Isolation is what makes hands-off autonomy safe. It's the core of Foreagent's control plane.",
+    "source": "Foreagent / agent-ops practice"
+  },
+  {
+    "id": "karpathy-agents",
+    "title": "Karpathy: software in the agent era",
+    "tag": "perspective",
+    "summary": "Andrej Karpathy's framing of coding agents as a new computing layer — keep humans in the loop with tight verification, build for partial autonomy, and treat English as a (leaky) programming surface over real tools.",
+    "why": "A grounded counter to both hype and dismissal: agents are powerful and fallible; design for both.",
+    "source": "Karpathy talks/essays"
+  }
+]

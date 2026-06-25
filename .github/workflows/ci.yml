@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tests, typecheck and the dev runtime use bun; the shipped artifact is plain Node.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run check
+
+      - name: Test
+        run: bun run test
+
+      - name: Build (web + self-contained server bundle)
+        run: bun run build
+
+      # Smoke-test the PLAIN-NODE artifact: it must boot and serve without bun.
+      - name: Smoke test packaged server on plain Node
+        run: |
+          mkdir -p /tmp/ch/projects /tmp/fh
+          CLAUDE_HOME=/tmp/ch FOREMAN_HOME=/tmp/fh PORT=3901 node bin/dist/server.mjs &
+          SRV=$!
+          for i in $(seq 1 20); do
+            if curl -sf localhost:3901/api/health > /dev/null; then echo "server up"; break; fi
+            sleep 0.3
+          done
+          curl -sf localhost:3901/api/health | grep -q '"ok":true'
+          kill $SRV

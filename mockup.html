@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FOREAGENT — Agent Orchestration</title>
+<!-- Brand-faithful type: geometric grotesque for UI, mono for data. System fallbacks so it renders offline / behind a proxy. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== EDGE / Katim defense-secure palette: matte black, graphite, white, steel-cyan signal ===== */
+  :root{
+    --bg:#070809;            /* satin matte black (Katim aluminium) */
+    --panel:#0E1013;         /* graphite panel */
+    --panel-2:#15181D;       /* raised card */
+    --line:#23272E;          /* hairline */
+    --line-2:#2E343C;
+    --txt:#F2F4F6;           /* near-white */
+    --txt-dim:#8A929C;       /* muted steel */
+    --txt-faint:#5A626C;
+    --accent:#39C2D7;        /* steel-cyan signal */
+    --accent-dim:#1C5862;
+    --warn:#E0A52B;          /* amber — dumb-zone / waiting */
+    --danger:#D6453E;        /* signal red */
+    --ok:#4FB477;            /* merged / green tests */
+    --claude:#A879F0;        /* vendor dots */
+    --codex:#4FB477;
+    --gemini:#4F8DF0;
+    --radius:10px;
+    --mono:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --ui:'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #0d1418 0%, transparent 60%),
+      var(--bg);
+    color:var(--txt);
+    font-family:var(--ui);
+    font-size:13px;
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  }
+
+  /* ===== Top bar ===== */
+  header{
+    display:flex;align-items:center;gap:18px;
+    padding:0 18px;height:54px;flex:0 0 54px;
+    background:linear-gradient(180deg,#0E1013,#0A0C0E);
+    border-bottom:1px solid var(--line);
+  }
+  /* KATIM/EDGE-style: bold uppercase wordmark, tight tracking, steel-cyan rule. */
+  .brand{font-weight:800;letter-spacing:.04em;font-size:16px;text-transform:uppercase;line-height:1;padding-bottom:4px;border-bottom:2px solid var(--accent);box-shadow:0 2px 12px -6px var(--accent)}
+  .crumbs{display:flex;align-items:center;gap:8px;color:var(--txt-dim);font-family:var(--mono);font-size:12px}
+  .crumbs .sel{background:var(--panel-2);border:1px solid var(--line);padding:4px 9px;border-radius:6px;color:var(--txt)}
+  .crumbs .branch{color:var(--accent)}
+  .live{display:flex;align-items:center;gap:6px;color:var(--ok);font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(79,180,119,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(79,180,119,.5)}70%{box-shadow:0 0 0 7px rgba(79,180,119,0)}100%{box-shadow:0 0 0 0 rgba(79,180,119,0)}}
+  .spacer{flex:1}
+  .stat{font-family:var(--mono);font-size:12px;color:var(--txt-dim)}
+  .stat b{color:var(--txt);font-weight:500}
+  .btn{
+    background:var(--accent);color:#06262b;border:none;font-weight:700;
+    padding:7px 13px;border-radius:7px;font-size:12px;letter-spacing:.04em;cursor:pointer;
+    box-shadow:0 0 16px -6px var(--accent);
+  }
+  .auto{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--txt-dim);text-transform:uppercase;letter-spacing:.1em}
+  .slider{width:46px;height:20px;border-radius:20px;background:var(--panel-2);border:1px solid var(--line-2);position:relative}
+  .slider::after{content:"";position:absolute;top:2px;left:24px;width:14px;height:14px;border-radius:50%;background:var(--accent);transition:.2s}
+
+  /* ===== Board ===== */
+  .board{flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);overflow:hidden;min-height:0}
+  .col{background:var(--bg);display:flex;flex-direction:column;min-height:0}
+  .col-h{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:11px 13px;border-bottom:1px solid var(--line);
+    text-transform:uppercase;letter-spacing:.18em;font-size:10.5px;font-weight:700;color:var(--txt-dim);
+  }
+  .col-h .count{font-family:var(--mono);color:var(--txt-faint);font-weight:500}
+  .col-body{padding:11px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+  .col-body::-webkit-scrollbar{width:6px}.col-body::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+
+  /* ===== Card ===== */
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:11px;position:relative;transition:.15s;
+  }
+  .card:hover{border-color:var(--line-2);transform:translateY(-1px)}
+  .card.active{border-color:var(--accent-dim);box-shadow:0 0 0 1px var(--accent-dim), 0 8px 24px -16px var(--accent)}
+  .card.warnglow{border-color:#5a4516;box-shadow:0 0 22px -10px var(--warn)}
+  .card .topline{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .vdot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .vdot.claude{background:var(--claude);box-shadow:0 0 8px -1px var(--claude)}
+  .vdot.codex{background:var(--codex);box-shadow:0 0 8px -1px var(--codex)}
+  .vdot.gemini{background:var(--gemini);box-shadow:0 0 8px -1px var(--gemini)}
+  .card .title{font-weight:600;font-size:13px;color:var(--txt);line-height:1.25}
+  .card .sub{color:var(--txt-dim);font-size:11.5px;margin-top:3px;line-height:1.4}
+  .tag{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--line-2);color:var(--txt-dim);text-transform:uppercase;letter-spacing:.06em}
+  .tag.ok{color:var(--ok);border-color:var(--accent-dim)}
+  .tag.amber{color:var(--warn);border-color:#5a4516}
+
+  /* progress + meters */
+  .bar{height:5px;border-radius:3px;background:var(--panel-2);overflow:hidden;margin:9px 0 8px}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent-dim),var(--accent))}
+  .meters{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .meter{font-family:var(--mono);font-size:10.5px;color:var(--txt-dim);background:var(--panel-2);border:1px solid var(--line);padding:2px 6px;border-radius:5px}
+  .meter.warn{color:var(--warn);border-color:#5a4516;background:#1a1505}
+  .meter.cost{color:var(--txt)}
+  .card-actions{display:flex;gap:6px;margin-top:10px}
+  .mini{flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;border:1px solid var(--line-2);background:var(--panel-2);color:var(--txt);cursor:pointer}
+  .mini.primary{background:var(--accent);color:#06262b;border-color:var(--accent);font-weight:700}
+  .notes{font-family:var(--mono);font-size:10.5px;color:var(--txt-dim);display:flex;align-items:center;gap:5px;margin-top:8px}
+  .idle{color:var(--warn);font-family:var(--mono);font-size:11px;display:flex;align-items:center;gap:6px;margin-top:6px}
+  .check{color:var(--ok);font-family:var(--mono);font-size:11px;margin-top:6px}
+
+  /* ===== Bottom dock ===== */
+  .dock{flex:0 0 210px;display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .pane{background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .pane-h{padding:9px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--txt-dim);font-weight:700}
+  .pane-h .ctx{font-family:var(--mono);color:var(--accent);text-transform:none;letter-spacing:0}
+  .pane-body{flex:1;overflow:auto;padding:10px 13px;font-family:var(--mono);font-size:11.5px;line-height:1.7}
+  .pane-body::-webkit-scrollbar{width:6px}.pane-body::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+  .log .t{color:var(--txt-faint)}
+  .log .tool{color:var(--accent)}
+  .log .warnline{color:var(--warn)}
+  .log .ok{color:var(--ok)}
+  .diff .add{color:var(--ok)}
+  .diff .del{color:var(--danger)}
+  .diff .ctxn{color:var(--txt-dim)}
+  .diff .cm{color:var(--txt-faint)}
+  .review-actions{display:flex;gap:8px;padding:9px 13px;border-top:1px solid var(--line)}
+  .review-actions .mini{flex:1}
+  .footer-note{position:absolute;bottom:6px;right:12px;font-family:var(--mono);font-size:9.5px;color:var(--txt-faint);letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">FOREAGENT</div>
+    <div class="crumbs">
+      <span class="sel">acme/api ▾</span>
+      <span>branch</span><span class="branch">main</span>
+    </div>
+    <div class="live"><span class="dot"></span>live</div>
+    <div class="spacer"></div>
+    <div class="stat">◐ <b>3</b> agents&nbsp;&nbsp;·&nbsp;&nbsp;session <b>$4.21</b>&nbsp;&nbsp;·&nbsp;&nbsp;ctx <b>38%</b></div>
+    <div class="auto">autonomy <span class="slider"></span> review&nbsp;@end</div>
+    <button class="btn">+ NEW TASK</button>
+  </header>
+
+  <!-- ===== KANBAN ===== -->
+  <section class="board">
+
+    <!-- ALIGNING -->
+    <div class="col">
+      <div class="col-h">Aligning <span class="count">01</span></div>
+      <div class="col-body">
+        <div class="card">
+          <div class="topline"><span class="title">Auth provider revamp</span></div>
+          <div class="sub">grill-me · clarifying scope</div>
+          <div class="meters"><span class="meter amber">16 questions</span><span class="meter">design tree</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPEC'D -->
+    <div class="col">
+      <div class="col-h">Spec'd <span class="count">01</span></div>
+      <div class="col-body">
+        <div class="card">
+          <div class="topline"><span class="title">Rate limiting</span></div>
+          <div class="sub">PRD written → GH issue #214</div>
+          <div class="meters"><span class="tag ok">PRD ✓</span><span class="meter">user stories ×5</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLICED -->
+    <div class="col">
+      <div class="col-h">Sliced <span class="count">02</span></div>
+      <div class="col-body">
+        <div class="card">
+          <div class="topline"><span class="title">JWT middleware</span></div>
+          <div class="sub">slice 2/4 · tracer-bullet</div>
+          <div class="meters"><span class="meter">blocks #3</span></div>
+        </div>
+        <div class="card">
+          <div class="topline"><span class="title">Token refresh tests</span></div>
+          <div class="sub">slice 3/4</div>
+          <div class="meters"><span class="meter">blockedBy #2</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BUILDING -->
+    <div class="col">
+      <div class="col-h">Building <span class="count">02</span></div>
+      <div class="col-body">
+        <div class="card active warnglow">
+          <div class="topline"><span class="vdot claude"></span><span class="title">OAuth + PKCE flow</span></div>
+          <div class="sub">claude-code · worktree <span style="color:var(--accent)">wt/oauth</span></div>
+          <div class="bar"><i style="width:68%"></i></div>
+          <div class="meters">
+            <span class="meter warn">ctx 41% ⚠</span>
+            <span class="meter cost">$1.80</span>
+            <span class="meter">24.1k tok</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="topline"><span class="vdot gemini"></span><span class="title">Audit log schema</span></div>
+          <div class="sub">gemini-cli · worktree <span style="color:var(--accent)">wt/audit</span></div>
+          <div class="idle">⏸ idle — waiting for user (permission)</div>
+          <div class="meters"><span class="meter">ctx 12%</span><span class="meter cost">$0.34</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IN REVIEW -->
+    <div class="col">
+      <div class="col-h">In Review <span class="count">01</span></div>
+      <div class="col-body">
+        <div class="card active">
+          <div class="topline"><span class="vdot codex"></span><span class="title">Webhook verification</span></div>
+          <div class="sub">codex · <span style="color:var(--ok)">+142 −30</span> · tests <span style="color:var(--ok)">✓ green</span></div>
+          <div class="notes">💬 2 review notes · 1 unresolved</div>
+          <div class="card-actions">
+            <button class="mini">View diff</button>
+            <button class="mini primary">Comment &amp; send ↩</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DONE -->
+    <div class="col">
+      <div class="col-h">Done <span class="count">02</span></div>
+      <div class="col-body">
+        <div class="card">
+          <div class="topline"><span class="title">DB migration runner</span></div>
+          <div class="check">✓ merged → PR #208</div>
+          <div class="meters"><span class="meter cost">$0.92</span></div>
+        </div>
+        <div class="card">
+          <div class="topline"><span class="title">Seed fixtures</span></div>
+          <div class="check">✓ merged → PR #205</div>
+          <div class="meters"><span class="meter cost">$0.41</span></div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===== DOCK: stream + review gate ===== -->
+  <section class="dock">
+    <div class="pane">
+      <div class="pane-h">▸ Agent Stream <span style="color:var(--claude)">●</span> claude / OAuth+PKCE <span class="spacer" style="flex:1"></span><span class="ctx">ctx 41%</span></div>
+      <div class="pane-body log">
+        <div><span class="t">14:02:11</span> <span class="tool">ToolUse</span> Edit src/auth/oauth.ts</div>
+        <div><span class="t">14:02:14</span> ✎ added PKCE code_verifier + S256 challenge</div>
+        <div><span class="t">14:02:31</span> <span class="tool">ToolUse</span> Bash · npm test auth/</div>
+        <div><span class="t">14:02:48</span> <span class="ok">✓ 11 passed</span>, 0 failed</div>
+        <div><span class="t">14:03:02</span> <span class="warnline">⚠ context 41% — approaching the ~40% "dumb zone"; compaction suggested</span></div>
+        <div><span class="t">14:03:05</span> <span class="tool">ToolUse</span> Edit src/auth/callback.ts</div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-h">▸ Diff <span style="color:var(--codex)">●</span> codex / webhook · <span style="text-transform:none;letter-spacing:0;color:var(--txt-dim)">src/webhooks/handler.ts</span></div>
+      <div class="pane-body diff">
+        <div><span class="cm">@@ -18,6 +18,9 @@ router setup</span></div>
+        <div><span class="del">- app.post('/hook', handler)</span></div>
+        <div><span class="add">+ app.post('/hook', verifySignature, handler)</span></div>
+        <div><span class="add">+ // HMAC-SHA256 over raw body, constant-time compare</span></div>
+        <div><span class="add">+ if (!timingSafeEqual(sig, expected)) return res.status(401)</span></div>
+        <div><span class="ctxn">  return handler(req, res)</span></div>
+      </div>
+      <div class="review-actions">
+        <button class="mini">Request changes</button>
+        <button class="mini">Comment &amp; send ↩</button>
+        <button class="mini primary">Approve &amp; merge</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-note">FOREAGENT · observe→control · multi-agent · v0.1 mockup</div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "code-reviewer",
+    "name": "code-reviewer",
+    "description": "Independent second-opinion review of changed code — correctness, security, edge cases, design fit. Read-only.",
+    "tags": ["review", "quality"],
+    "skillMd": "---\nname: code-reviewer\ndescription: Review changed code for correctness, security, edge cases, and design fit. Read-only; report findings with file:line references.\n---\n\nReview the provided diff or changed files. For each finding give: severity, file:line, what's wrong, and the cheapest fix. Prioritise correctness and security over style. Do not edit files."
+  },
+  {
+    "id": "test-author",
+    "name": "test-author",
+    "description": "Write focused tests for new or changed code: happy path, edge cases, and one failure mode per unit.",
+    "tags": ["testing", "quality"],
+    "skillMd": "---\nname: test-author\ndescription: Author focused unit/integration tests for changed code, covering happy path, edge cases, and failure modes.\n---\n\nGiven changed code, write tests that would catch regressions. Cover the happy path, boundary conditions, and at least one failure mode per unit. Match the project's existing test framework and style."
+  },
+  {
+    "id": "api-designer",
+    "name": "api-designer",
+    "description": "Design REST/RPC endpoints with clear contracts, status codes, validation, and error shapes before implementing.",
+    "tags": ["design", "backend"],
+    "skillMd": "---\nname: api-designer\ndescription: Design API endpoints — routes, request/response schemas, status codes, validation, and error contracts — before implementation.\n---\n\nProduce an endpoint contract first: method, path, request schema, response schema, status codes, error shapes, and idempotency notes. Flag breaking changes. Then implement to the contract."
+  },
+  {
+    "id": "perf-profiler",
+    "name": "perf-profiler",
+    "description": "Find and rank performance bottlenecks, then propose the cheapest high-impact fix with a measurement plan.",
+    "tags": ["performance"],
+    "skillMd": "---\nname: perf-profiler\ndescription: Identify performance bottlenecks, rank by impact, and propose measured fixes.\n---\n\nMeasure before optimising. Identify hotspots, rank by impact × frequency, propose the cheapest high-impact change, and state how to verify the win with a benchmark."
+  }
+]

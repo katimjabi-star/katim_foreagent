@@ -1,0 +1,135 @@
+/* FOREAGENT design system — see assets/skills/foreagent-ui/SKILL.md.
+   KATIM / EDGE Group brand identity: Gibson typography, signal orange,
+   disciplined charcoal two-tone, flat structural surfaces, orange rule
+   accents + arrow CTAs. Applied over a dark control-room base. */
+:root {
+  /* Canvas. */
+  --bg: #0b0d10;
+
+  /* Surfaces — solid charcoal, lightly raised by elevation (flat, not glassy). */
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-2: rgba(255, 255, 255, 0.075);
+  --raised: rgba(255, 255, 255, 0.11);
+  --line: rgba(255, 255, 255, 0.11);
+  --line-2: rgba(255, 255, 255, 0.18);
+  --charcoal: #363d45;
+
+  /* Text ramp. */
+  --txt: #f3f5f7;
+  --txt-dim: #98a1ab;
+  --txt-faint: #69727c;
+
+  /* Signal — EDGE / KATIM orange. */
+  --accent: #ee5a24;
+  --accent-2: #f6814e;
+  --accent-strong: #c9420f;
+  --accent-dim: rgba(238, 90, 36, 0.45);
+  --accent-ghost: rgba(238, 90, 36, 0.11);
+  --on-accent: #ffffff;
+  --warn: #f0a830;
+  --danger: #e0554d;
+  --ok: #5bbd83;
+
+  /* Vendor hues. Claude is the house/primary vendor, so it wears the KATIM brand
+     orange; Codex/Gemini keep distinct secondary hues for multi-vendor boards. */
+  --claude: #ee5a24;
+  --codex: #5bbd83;
+  --gemini: #5a96f5;
+
+  /* Radius — near-square, structural (KATIM uses sharp blocks). */
+  --r-sm: 3px;
+  --r-md: 5px;
+  --r-lg: 8px;
+  --radius: 5px;
+
+  /* Spacing scale (4px base). */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 28px;
+
+  /* Elevation. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 28px -14px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 28px 70px -26px rgba(0, 0, 0, 0.9);
+  --glow: 0 0 16px -5px var(--accent);
+
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --ui: 'Gibson', 'Poppins', 'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background:
+    radial-gradient(1100px 560px at 88% -14%, rgba(238, 90, 36, 0.10) 0%, transparent 56%),
+    radial-gradient(880px 500px at -4% 112%, rgba(54, 61, 69, 0.5) 0%, transparent 52%),
+    var(--bg);
+  color: var(--txt);
+  font-family: var(--ui);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+#app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Light, restrained blur on surfaces — flat brand look, not heavy glass. */
+.panel, .card, .modal, .glass, .ai-suggest, .fitem {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* --- Brand primitives (see SKILL.md) --- */
+
+/* The orange rule — short underline bar beneath a heading. KATIM's core motif. */
+.rule { display: block; width: 32px; height: 3px; background: var(--accent); border-radius: 1px; }
+
+/* Section index marker — orange mono "02/". */
+.sectnum { font-family: var(--mono); font-weight: 700; color: var(--accent); letter-spacing: .04em; }
+
+/* Panel headers (.p-h) carry the orange underline rule app-wide. Generated
+   content, so it slips past Svelte scoping and never disturbs flex layout. */
+.p-h { position: relative; }
+.p-h::after { content: ''; position: absolute; left: 0; bottom: -5px; width: 26px; height: 2px; background: var(--accent); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; line-height: 1; font-weight: 600;
+  padding: 4px 9px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--txt-dim);
+}
+
+.glass {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-sm);
+}
+
+/* Primary action — flat solid orange block, white label, trailing arrow. */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 9px;
+  border: none; cursor: pointer;
+  font-family: var(--ui); font-weight: 700; font-size: 12.5px; letter-spacing: .01em;
+  color: var(--on-accent); padding: 9px 16px; border-radius: var(--r-sm);
+  background: var(--accent);
+  transition: background .14s ease, transform .1s ease;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+.btn-primary:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary:disabled { opacity: .5; cursor: default; }
+
+/* Secondary — charcoal outline block. */
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; font-family: var(--ui); font-weight: 600; font-size: 12.5px;
+  color: var(--txt); padding: 8px 14px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: transparent;
+  transition: border-color .14s ease, color .14s ease, background .14s ease;
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: #fff; }
+.btn-ghost:disabled { opacity: .5; cursor: default; }
+
+/* Refined scrollbars — slim, appear on hover. */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: transparent; border: 3px solid transparent; border-radius: 9px; background-clip: padding-box; box-shadow: inset 0 0 0 10px var(--line-2); }
+:hover::-webkit-scrollbar-thumb { box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.28); }
+
+/* Selection. */
+::selection { background: rgba(238, 90, 36, 0.34); color: #fff; }

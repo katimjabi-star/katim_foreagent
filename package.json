@@ -1,0 +1,47 @@
+{
+  "name": "foreman",
+  "version": "0.1.0",
+  "description": "Observe → control orchestrator for AI coding agents (Claude Code, Codex, Gemini). Local-first kanban with context-budget meters and a review gate.",
+  "type": "module",
+  "bin": {
+    "foreman": "bin/foreman.mjs"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin/foreman.mjs",
+    "bin/install.mjs",
+    "bin/dist/server.mjs",
+    "apps/web/dist",
+    "assets/hooks",
+    "assets/marketplace",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "dev:server": "bun apps/server/src/index.ts",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "build:server": "node scripts/build-server.mjs",
+    "build": "npm run build:web && npm run build:server",
+    "start": "bun apps/server/src/index.ts",
+    "check": "tsc -p tsconfig.base.json --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run check && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/node": "^22.10.5",
+    "esbuild": "^0.24.2",
+    "svelte": "^5.20.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^3.0.4"
+  },
+  "license": "MIT"
+}

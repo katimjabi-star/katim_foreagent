@@ -1,0 +1,7 @@
+[
+  { "id": "add-tests", "title": "Add a test suite", "tag": "quality", "prompt": "Set up a test framework appropriate to this project's stack if one isn't present, then write focused tests for the most important modules. Cover happy paths, edge cases, and one failure mode per unit. Make the tests pass." },
+  { "id": "setup-ci", "title": "Set up CI", "tag": "devops", "prompt": "Add a CI workflow (GitHub Actions) that installs dependencies, type-checks, runs the test suite, and builds the project. Use the project's existing scripts. Keep it minimal and fast." },
+  { "id": "add-health", "title": "Add a health endpoint", "tag": "backend", "prompt": "Add a /health endpoint that returns service status and version as JSON, wire it into the existing server, and add a test for it." },
+  { "id": "readme", "title": "Write a README", "tag": "docs", "prompt": "Write a clear, accurate README for this project: what it does, how to install and run it, the architecture in brief, and how to develop. Base it strictly on the actual code — do not invent features." },
+  { "id": "dep-audit", "title": "Dependency audit", "tag": "security", "prompt": "Audit dependencies for known vulnerabilities and unused packages. Report findings ranked by severity and propose safe upgrades. Do not upgrade anything that would be a breaking change without flagging it." }
+]
